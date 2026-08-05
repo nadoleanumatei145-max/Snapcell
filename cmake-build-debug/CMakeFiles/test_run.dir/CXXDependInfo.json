@@ -1,0 +1,30 @@
+{
+	"bmi-installation" : null,
+	"compiler-frontend-variant" : "GNU",
+	"compiler-id" : "GNU",
+	"compiler-simulate-id" : "",
+	"config" : "Debug",
+	"cxx-modules" : {},
+	"database-info" : null,
+	"dir-cur-bld" : "/home/nadoleanum/CLionProjects/libtui/cmake-build-debug",
+	"dir-cur-src" : "/home/nadoleanum/CLionProjects/libtui",
+	"dir-top-bld" : "/home/nadoleanum/CLionProjects/libtui/cmake-build-debug",
+	"dir-top-src" : "/home/nadoleanum/CLionProjects/libtui",
+	"exports" : [],
+	"forward-modules-from-target-dirs" : [],
+	"include-dirs" : 
+	[
+		"/usr/include/webp"
+	],
+	"language" : "CXX",
+	"linked-target-dirs" : [],
+	"module-dir" : "/home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/test_run.dir",
+	"sources" : 
+	{
+		"CMakeFiles/test_run.dir/main.cpp.o" : 
+		{
+			"language" : "CXX",
+			"source" : "/home/nadoleanum/CLionProjects/libtui/main.cpp"
+		}
+	}
+}

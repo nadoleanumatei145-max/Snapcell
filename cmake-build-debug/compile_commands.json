@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/nadoleanum/CLionProjects/libtui/cmake-build-debug",
+  "command": "/usr/bin/c++ -I/usr/include/webp -g -std=gnu++20 -fdiagnostics-color=always -fmodules-ts -fmodule-mapper=CMakeFiles/test_run.dir/main.cpp.o.modmap -MD -fdeps-format=p1689r5 -x c++ -o CMakeFiles/test_run.dir/main.cpp.o -c /home/nadoleanum/CLionProjects/libtui/main.cpp",
+  "file": "/home/nadoleanum/CLionProjects/libtui/main.cpp",
+  "output": "/home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/test_run.dir/main.cpp.o"
+}
+]
