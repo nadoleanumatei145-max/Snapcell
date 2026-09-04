@@ -1,4 +1,3 @@
-/home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/libtui.dir
 /home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/test_run.dir
 /home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/edit_cache.dir
 /home/nadoleanum/CLionProjects/libtui/cmake-build-debug/CMakeFiles/rebuild_cache.dir

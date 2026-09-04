@@ -1,12 +1,10 @@
-//      ▗▄▄▖▗▖  ▗▖ ▗▄▖ ▗▄▄▖ ▗▄▄▖▗▄▄▄▖▗▖   ▗▖
-//      ▐▌   ▐▛▚▖▐▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌   ▐▌   ▐▌
-//       ▝▀▚▖▐▌ ▝▜▌▐▛▀▜▌▐▛▀▘ ▐▌   ▐▛▀▀▘▐▌   ▐▌
-//      ▗▄▄▞▘▐▌  ▐▌▐▌ ▐▌▐▌   ▝▚▄▄▖▐▙▄▄▖▐▙▄▄▖▐▙▄▄▖
+//     ▗▄▄▖▗▖  ▗▖ ▗▄▖ ▗▄▄▖  ▗▄▄▖▗▄▄▄▖▗▖   ▗▖
+//    ▐▌   ▐▛▚▖▐▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌   ▐▌   ▐▌
+//     ▝▀▚▖▐▌ ▝▜▌▐▛▀▜▌▐▛▀▘ ▐▌   ▐▛▀▀▘▐▌   ▐▌
+//    ▗▄▄▞▘▐▌  ▐▌▐▌ ▐▌▐▌   ▝▚▄▄▖▐▙▄▄▖▐▙▄▄▖▐▙▄▄▖
 
 #ifndef SNAPCELL_LIBRARY_HPP
 #define SNAPCELL_LIBRARY_HPP
-#define STB_IMAGE_IMPLEMENTATION
-
 
 #include <iostream>
 #include <vector>
@@ -17,31 +15,176 @@
 #include <csignal>
 #include <atomic>
 #include <memory>
-#include <unordered_map>
-#include <algorithm>
-#include <fstream>
-#include <cmath>
+#include <cstdint>
+#include <cctype>
 #include <chrono>
-#include <stb/stb_image.h>
-
-// Optional dependency forward-declarations for standard image decoding backends:
-// To compile: define STB_IMAGE_IMPLEMENTATION before including this or link against libwebp
-extern "C" {
-    unsigned char *stbi_load(char const *filename, int *x, int *y, int *channels_in_file, int desired_channels);
-    unsigned char *stbi_load_gif_from_memory(unsigned char const *buffer, int len, int **delays, int *x, int *y, int *z, int *comp, int req_comp);
-    void stbi_image_free(void *retval_from_stbi_load);
-    unsigned char *WebPDecodeRGBA(const unsigned char* data, size_t data_size, int* width, int* height);
-}
+#include <optional>
+#include <fstream>
+#include <cstdlib>
+#include <webp/decode.h>
+// Include stb_image direct aici
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
 
 namespace tui {
     // A global flag for the Linux kernel resize signal
     inline std::atomic<bool> global_screen_resized(false);
     inline void handle_resize_signal(int) { global_screen_resized.store(true); }
 
-    //      ▗        ▗    ▗
-    //    ▛▘▜▘▛▘▌▌▛▘▜▘ ▚  █▌▛▌▌▌▛▛▌▛▘
-    //    ▄▌▐▖▌ ▙▌▙▖▐▖ ▚▌  ▙▖▌▌▙▌▌▌▌▄▌
+    //      ▗       ▗   ▗
+    //    ▛▘▜▘▛▘▌▌▛▘▜▘  ▚▘  █▌▛▌▌▌▛▛▌▛▘
+    //    ▄▌▐▖▌ ▙▌▙▖▐▖  ▚▌  ▙▖▌▌▙▌▌▌▌▄▌
     //
+
+    enum class MouseButton {
+        None,
+        Left,
+        Middle,
+        Right,
+        WheelUp,
+        WheelDown
+    };
+
+    enum class MouseEventType {
+        Press,
+        Release,
+        Move
+    };
+
+    struct MouseEvent {
+        MouseEventType type = MouseEventType::Press;
+        MouseButton button = MouseButton::None;
+        int x = 0; // Coordonate 0-indexed pe grila TTY
+        int y = 0;
+        bool ctrl = false;
+        bool alt = false;
+        bool shift = false;
+
+        explicit operator bool() const { return button != MouseButton::None || type == MouseEventType::Move; }
+    };
+
+    namespace key {
+        // Taste speciale neafișabile
+        inline constexpr uint32_t esc       = 27;
+        inline constexpr uint32_t enter     = 10;
+        inline constexpr uint32_t tab       = 9;
+        inline constexpr uint32_t backspace = 127;
+        inline constexpr uint32_t space     = 32;
+
+        inline constexpr uint32_t up        = 1000;
+        inline constexpr uint32_t down      = 1001;
+        inline constexpr uint32_t right     = 1002;
+        inline constexpr uint32_t left      = 1003;
+        inline constexpr uint32_t home      = 1004;
+        inline constexpr uint32_t end       = 1005;
+        inline constexpr uint32_t delete_k  = 1006;
+        inline constexpr uint32_t page_up   = 1007;
+        inline constexpr uint32_t page_down = 1008;
+
+        // F1 - F12
+        inline constexpr uint32_t f1        = 1101;
+        inline constexpr uint32_t f2        = 1102;
+        inline constexpr uint32_t f3        = 1103;
+        inline constexpr uint32_t f4        = 1104;
+        inline constexpr uint32_t f5        = 1105;
+        inline constexpr uint32_t f6        = 1106;
+        inline constexpr uint32_t f7        = 1107;
+        inline constexpr uint32_t f8        = 1108;
+        inline constexpr uint32_t f9        = 1109;
+        inline constexpr uint32_t f10       = 1110;
+        inline constexpr uint32_t f11       = 1111;
+        inline constexpr uint32_t f12       = 1112;
+    }
+
+    struct Key {
+        uint32_t code = 0; // ASCII ('a', 'X', '1') SAU constantele key::*
+        bool ctrl  = false;
+        bool alt   = false;
+        bool shift = false;
+
+        // Verificări directe
+        explicit operator bool() const { return code != 0; }
+
+        // Suport comparare curată: if (k == 'q') sau if (k == key::up)
+        bool operator==(char ch) const {
+            return code == static_cast<uint32_t>(ch);
+        }
+        bool operator==(uint32_t key_code) const {
+            return code == key_code;
+        }
+
+        bool is_char() const {
+            return code >= 32 && code <= 126 && !ctrl && !alt;
+        }
+        char to_char() const { return static_cast<char>(code); }
+    };
+
+    struct Event {
+        enum Type { None, KeyEv, MouseEv } type = None;
+        Key key;
+        MouseEvent mouse;
+    };
+
+    struct WidthMod {
+        int value;
+    };
+
+    // Helper function pentru o sintaxă curată (lowercase)
+    inline WidthMod width(int width) {
+        return WidthMod{width};
+    }
+
+    struct HeightMod {
+        int value;
+    };
+
+    inline HeightMod height(int height) {
+        return HeightMod{height};
+    }
+
+    struct XMod {
+        int value;
+    };
+
+    inline XMod x(int x) {
+        return XMod{x};
+    }
+
+    struct YMod {
+        int value;
+    };
+
+    inline YMod y(int y) {
+        return YMod{y};
+    }
+
+    enum class ColorMode {
+        TrueColor,  // Randare nativă RGB pixel cu pixel
+        Solid,      // Culoare unică fixă peste tot (fără variație de luminozitate)
+        Tint        // Culoare unică nuanțată (intensitatea depinde de luminozitatea pixelului)
+    };
+
+    enum Fill {
+        nofill = 0,
+        hfill,
+        vfill,
+        fill
+    };
+
+    enum Anchor {
+        noanchor = 0,
+        left     = 1 << 0, // 1
+        hcenter  = 1 << 1, // 2
+        right    = 1 << 2, // 4
+        top      = 1 << 3, // 8
+        vcenter  = 1 << 4, // 16
+        bottom   = 1 << 5, // 32
+        center   = hcenter | vcenter // 18
+    };
+
+    inline Anchor operator|(Anchor a, Anchor b) {
+        return static_cast<Anchor>(static_cast<int>(a) | static_cast<int>(b));
+    }
 
     enum Colors {
         black = 0,
@@ -70,32 +213,39 @@ namespace tui {
     };
 
     enum Mod {
-        border,
-        fill,
-        hfill,
-        vfill,
-        center,
-        hcenter,
-        vcenter,
-        color
+        border
     };
-
-    enum class LayoutDir { Horizontal, Vertical, None };
 
     struct Cell {
         std::string ch = " ";
         int fg = 15;        // Default text color (White)
         int bg = -1;         // Default background color (Black)
         int style = normal; // Default text format style
+
+        // Suport TrueColor (RGB)
+        bool is_rgb = false;
+        uint8_t r = 255, g = 255, b = 255;
     };
 
     struct bg_color { Colors c; };
-    struct custom_color { Colors c; custom_color(Colors color_val) : c(color_val) {} };
 
-    //                  ▘▗
+    struct ColorConfig {
+        ColorMode mode = ColorMode::TrueColor;
+        Colors solid_color = Colors::white; // Culoare ANSI fixă (pentru Solid)
+        struct RGB { uint8_t r, g, b; } tint_color{255, 255, 255}; // Culoare RGB (pentru Tint)
+    };
+
+    //                 ▘▗
     //    ▛▘▛▌▛▛▌▛▌▛▌▛▘▌▜▘▛▌▛▘
     //    ▙▖▙▌▌▌▌▙▌▙▌▄▌▌▐▖▙▌▌
-    //            ▌
+    //           ▌
+
+    inline bool is_native_tty() {
+        const char* term = std::getenv("TERM");
+        if (!term) return false;
+        std::string t(term);
+        return (t == "linux" || t.rfind("tty", 0) == 0);
+    }
 
     class compositor {
     private:
@@ -105,10 +255,6 @@ namespace tui {
 
         std::vector<Cell> front_buffer;
         std::vector<Cell> back_buffer;
-
-        // Hidden layout tracking maps
-        std::unordered_map<int, std::vector<int>> horiz_lines; // y -> list of x coords
-        std::unordered_map<int, std::vector<int>> vert_lines;  // x -> list of y coords
 
         // Internal tool: Asks Linux how big the physical TTY screen is
         void updateDimensions() {
@@ -129,6 +275,113 @@ namespace tui {
             std::cout << "\033[" << (y + 1) << ";" << (x + 1) << "H";
         }
 
+        std::vector<char> input_buffer;
+
+        // Citește tot ce este în STDIN în bufferul intern
+        void read_stdin_to_buffer() {
+            char chunk[256];
+            while (true) {
+                ssize_t n = read(STDIN_FILENO, chunk, sizeof(chunk));
+                if (n <= 0) break;
+                input_buffer.insert(input_buffer.end(), chunk, chunk + n);
+            }
+        }
+
+        char pop_byte() {
+            if (input_buffer.empty()) return 0;
+            char b = input_buffer.front();
+            input_buffer.erase(input_buffer.begin());
+            return b;
+        }
+
+        char peek_byte(size_t offset = 0) {
+            if (offset >= input_buffer.size()) return 0;
+            return input_buffer[offset];
+        }
+
+        std::vector<std::string> ascii_palette = {" ", ".", ":", "*", "#", "%", "@"};
+
+        // Funcție privată ajutătoare pentru parsarea corectă a secvențelor UTF-8
+        static std::vector<std::string> parse_utf8_string(const std::string& str) {
+            std::vector<std::string> chars;
+            for (size_t i = 0; i < str.size(); ) {
+                unsigned char c = str[i];
+                int len = 1;
+                if ((c & 0x80) == 0x00) len = 1;      // Caracter ASCII (1 octet)
+                else if ((c & 0xE0) == 0xC0) len = 2; // UTF-8 (2 octeți)
+                else if ((c & 0xF0) == 0xE0) len = 3; // UTF-8 (3 octeți - ex: ░, ▒, ▓, █)
+                else if ((c & 0xF8) == 0xF0) len = 4; // UTF-8 (4 octeți)
+
+                chars.push_back(str.substr(i, len));
+                i += len;
+            }
+            return chars;
+        }
+
+        // Funcție internă de asistență pentru maparea pixelilor
+        void render_pixel_buffer(const uint8_t* pixels, int img_w, int img_h, int channels,
+                        int x, int y, int w, int h,
+                        const ColorConfig& config)
+{
+    for (int row = 0; row < h; ++row) {
+        for (int col = 0; col < w; ++col) {
+            int target_x = x + col;
+            int target_y = y + row;
+
+            if (target_x < 0 || target_x >= width || target_y < 0 || target_y >= height)
+                continue;
+
+            int src_x = (col * img_w) / w;
+            int src_y = (row * img_h) / h;
+            int idx = (src_y * img_w + src_x) * channels;
+
+            uint8_t r = pixels[idx];
+            uint8_t g = pixels[idx + 1];
+            uint8_t b = pixels[idx + 2];
+            uint8_t a = (channels == 4) ? pixels[idx + 3] : 255;
+
+            if (a < 128) continue; // Skip pixeli transparenți
+
+            uint8_t lum = static_cast<uint8_t>(0.299f * r + 0.587f * g + 0.114f * b);
+
+            size_t pal_idx = (static_cast<size_t>(lum) * (ascii_palette.size() - 1)) / 255;
+            if (pal_idx >= ascii_palette.size()) pal_idx = ascii_palette.size() - 1;
+
+            const std::string& ch = ascii_palette[pal_idx];
+
+            // RENDER BAZAT PE MODUL ALES:
+            switch (config.mode) {
+                case ColorMode::Solid:
+                    // Aceeași culoare fixă peste tot
+                    setChar(target_x, target_y, ch, config.solid_color);
+                    break;
+
+                case ColorMode::Tint: {
+                    // Scalăm nuanța target în funcție de luminozitate (0.0f - 1.0f)
+                    float factor = lum / 255.0f;
+                    uint8_t tr = static_cast<uint8_t>(config.tint_color.r * factor);
+                    uint8_t tg = static_cast<uint8_t>(config.tint_color.g * factor);
+                    uint8_t tb = static_cast<uint8_t>(config.tint_color.b * factor);
+
+                    setCharRGB(target_x, target_y, ch, tr, tg, tb);
+                    break;
+                }
+
+                case ColorMode::TrueColor:
+                default:
+                    // Culorile originale ale imaginii
+                    setCharRGB(target_x, target_y, ch, r, g, b);
+                    break;
+            }
+        }
+    }
+}
+
+        // Stochează o culoare opțională unică pentru tot procesul de desenare
+        std::optional<Colors> active_override_color = std::nullopt;
+
+        ColorConfig current_color_config;
+
     public:
         compositor() {
             // 1. Turn on Raw Mode (Instant keypresses, hide typing)
@@ -146,6 +399,12 @@ namespace tui {
             // 3. Detect initial size & prepare buffers
             updateDimensions();
             std::cout << "\033[?25l"; // Hide the blinking cursor for clean rendering
+
+            std::cout << "\033[?1000h\033[?1002h\033[?1006h";
+            std::cout.flush();
+
+            updateDimensions();
+            std::cout << "\033[?25l";
         }
 
         ~compositor() {
@@ -158,33 +417,25 @@ namespace tui {
         int getWidth() const { return width; }
         int getHeight() const { return height; }
 
+        // Setter flexibil care acceptă atât std::string (" ░▒▓█"), cât și std::vector<std::string>
+        compositor& set_ascii_palette(const std::string& palette) {
+            if (!palette.empty()) {
+                ascii_palette = parse_utf8_string(palette);
+            }
+            return *this;
+        }
+
+        compositor& set_ascii_palette(const std::vector<std::string>& palette) {
+            if (!palette.empty()) {
+                ascii_palette = palette;
+            }
+            return *this;
+        }
+
         // --- YOUR CLEAN CUSTOM SYNTAX API ---
 
-        void setChar(int x, int y, std::string ch, int fg = 15, int bg = -1, int style = normal) {
+        void setChar(int x, int y, std::string ch, int fg = 15, int bg = 0, int style = normal) {
             if (x >= 0 && x < width && y >= 0 && y < height) {
-                // If the incoming char is a line or junction, check for structural intersections
-                if (ch == "─" || ch == "│" || ch == "┌" || ch == "┐" ||
-                    ch == "└" || ch == "┘" || ch == "├" || ch == "┤" ||
-                    ch == "┬" || ch == "┴" || ch == "┼") {
-
-                    bool has_h = hasLineH(x, y);
-                    bool has_v = hasLineV(x, y);
-
-                    if (has_h && has_v) {
-                        // Determine layout constraints to pick the right intersection type
-                        bool left  = hasLineH(x - 1, y);
-                        bool right = hasLineH(x + 1, y);
-                        bool up    = hasLineV(x, y - 1);
-                        bool down  = hasLineV(x, y + 1);
-
-                        if (left && right && up && down) ch = "┼";
-                        else if (left && right && down)  ch = "┬";
-                        else if (left && right && up)    ch = "┴";
-                        else if (up && down && right)    ch = "├";
-                        else if (up && down && left)     ch = "┤";
-                    }
-                    }
-
                 int idx = y * width + x;
                 back_buffer[idx].ch = ch;
                 back_buffer[idx].fg = fg;
@@ -193,7 +444,7 @@ namespace tui {
             }
         }
 
-        void setString(int x, int y, const std::string& text, int fg = 15, int bg = -1, int style = normal) {
+        void setString(int x, int y, const std::string& text, int fg = 15, int bg = 0, int style = normal) {
             size_t i = 0;
             int screen_offset = 0;
 
@@ -202,7 +453,7 @@ namespace tui {
                 size_t len = 1;
 
                 // Determine how many bytes this UTF-8 character takes up
-                if ((c & 0x80) == 0)           len = 1; // Standard ASCII
+                if ((c & 0x80) == 0)         len = 1; // Standard ASCII
                 else if ((c & 0xE0) == 0xC0) len = 2; // 2-byte UTF-8
                 else if ((c & 0xF0) == 0xE0) len = 3; // 3-byte UTF-8 (Like box-drawing arrows/lines)
                 else if ((c & 0xF8) == 0xF0) len = 4; // 4-byte UTF-8 (Like Emojis)
@@ -221,17 +472,237 @@ namespace tui {
             }
         }
 
-        char getKey() {
-            char c = 0;
-            read(STDIN_FILENO, &c, 1);
-            return c; // Returns 0 if no key was pressed
+        void setCharRGB(int x, int y, std::string ch, uint8_t r, uint8_t g, uint8_t b) {
+            if (x >= 0 && x < width && y >= 0 && y < height) {
+                int idx = y * width + x;
+                back_buffer[idx].ch = ch;
+                back_buffer[idx].is_rgb = true;
+                back_buffer[idx].r = r;
+                back_buffer[idx].g = g;
+                back_buffer[idx].b = b;
+                back_buffer[idx].bg = -1;
+                back_buffer[idx].style = normal;
+            }
         }
+
+        // 1. Modul True Color (implicit)
+        compositor& use_true_color() {
+            current_color_config.mode = ColorMode::TrueColor;
+            return *this;
+        }
+
+        // 2. Modul Solid (aceeași culoare peste tot)
+        compositor& set_solid_color(Colors color) {
+            current_color_config.mode = ColorMode::Solid;
+            current_color_config.solid_color = color;
+            return *this;
+        }
+
+        // 3. Modul Tint (nuanțare în funcție de luminozitate)
+        compositor& set_tint_color(uint8_t r, uint8_t g, uint8_t b) {
+            current_color_config.mode = ColorMode::Tint;
+            current_color_config.tint_color = {r, g, b};
+            return *this;
+        }
+
+        // Curățarea culorii unice (revenire la True RGB)
+        compositor& reset_color() {
+            active_override_color = std::nullopt;
+            return *this;
+        }
+
+        Key getKey() {
+            read_stdin_to_buffer();
+            if (input_buffer.empty()) return Key{};
+
+            char b = pop_byte();
+            Key k;
+
+            // 1. Detecție Ctrl + A ... Ctrl + Z (Valori ASCII 1..26)
+            if (b >= 1 && b <= 26 && b != 9 && b != 10 && b != 13) {
+                k.code = 'a' + (b - 1);
+                k.ctrl = true;
+                return k;
+            }
+
+            // 2. Parsare secvențe lungi ANSI (ESC / Alt)
+            if (b == 27) { // ESC
+                if (input_buffer.empty()) {
+                    // Tasta ESC apăsată singură
+                    k.code = key::esc;
+                    return k;
+                }
+
+                char next = peek_byte(0);
+
+                // Alt + Key (Secvență de tip ESC + caracter)
+                if (next != '[' && next != 'O') {
+                    k.alt = true;
+                    char alt_ch = pop_byte();
+                    if (alt_ch >= 1 && alt_ch <= 26) {
+                        k.ctrl = true;
+                        k.code = 'a' + (alt_ch - 1);
+                    } else {
+                        k.code = static_cast<uint32_t>(alt_ch);
+                    }
+                    return k;
+                }
+
+                // Secvență ANSI CSI (ESC [ ...)
+                if (next == '[') {
+                    pop_byte(); // Consumăm '['
+
+                    std::string seq;
+                    while (!input_buffer.empty()) {
+                        char c = pop_byte();
+                        seq += c;
+                        // Secvențele CSI se termină într-un caracter final (A-Z, a-z, ~)
+                        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '~') {
+                            break;
+                        }
+                    }
+
+                    // Extragere modificatori dacă există (ex: "1;5A" -> Ctrl + Up)
+                    int modifier = 1;
+                    size_t semi = seq.find(';');
+                    if (semi != std::string::npos && semi + 1 < seq.size()) {
+                        modifier = seq[semi + 1] - '0';
+                    }
+
+                    if (modifier == 2 || modifier == 4 || modifier == 6 || modifier == 8) k.shift = true;
+                    if (modifier == 3 || modifier == 4 || modifier == 7 || modifier == 8) k.alt   = true;
+                    if (modifier == 5 || modifier == 6 || modifier == 7 || modifier == 8) k.ctrl  = true;
+
+                    char final_char = seq.back();
+
+                    // Săgeți
+                    if (final_char == 'A') { k.code = key::up; return k; }
+                    if (final_char == 'B') { k.code = key::down; return k; }
+                    if (final_char == 'C') { k.code = key::right; return k; }
+                    if (final_char == 'D') { k.code = key::left; return k; }
+                    if (final_char == 'H') { k.code = key::home; return k; }
+                    if (final_char == 'F') { k.code = key::end; return k; }
+
+                    // Coduri numerice cu '~' (ex: Delete, PageUp, F-keys)
+                    if (final_char == '~') {
+                        int num = std::atoi(seq.c_str());
+                        switch (num) {
+                            case 3:  k.code = key::delete_k; break;
+                            case 5:  k.code = key::page_up; break;
+                            case 6:  k.code = key::page_down; break;
+                            case 15: k.code = key::f5; break;
+                            case 17: k.code = key::f6; break;
+                            case 18: k.code = key::f7; break;
+                            case 19: k.code = key::f8; break;
+                            case 20: k.code = key::f9; break;
+                            case 21: k.code = key::f10; break;
+                            case 23: k.code = key::f11; break;
+                            case 24: k.code = key::f12; break;
+                        }
+                        return k;
+                    }
+                }
+
+                // Format VT100 SS3 (ESC O P / Q / R / S pentru F1-F4)
+                if (next == 'O') {
+                    pop_byte(); // Consumăm 'O'
+                    char code_char = pop_byte();
+                    switch (code_char) {
+                        case 'P': k.code = key::f1; break;
+                        case 'Q': k.code = key::f2; break;
+                        case 'R': k.code = key::f3; break;
+                        case 'S': k.code = key::f4; break;
+                    }
+                    return k;
+                }
+            }
+
+            // 3. Caractere normale / Enter / Backspace / Tab
+            if (b == 13 || b == 10) k.code = key::enter;
+            else if (b == 127 || b == 8) k.code = key::backspace;
+            else if (b == 9) k.code = key::tab;
+            else k.code = static_cast<unsigned char>(b);
+
+            return k;
+        }
+
+        Event getEvent() {
+        read_stdin_to_buffer();
+        if (input_buffer.empty()) return Event{};
+
+        // 1. Verificăm dacă secvența din buffer este de Mouse SGR: ESC [ < ...
+        if (peek_byte(0) == 27 && peek_byte(1) == '[' && peek_byte(2) == '<') {
+            // Căutăm 'm' sau 'M' care marchează finalul pachetului SGR
+            size_t end_pos = 0;
+            for (size_t i = 3; i < input_buffer.size(); ++i) {
+                if (input_buffer[i] == 'm' || input_buffer[i] == 'M') {
+                    end_pos = i;
+                    break;
+                }
+            }
+
+            if (end_pos > 0) {
+                // Extragere secvență completă
+                std::string seq(input_buffer.begin() + 3, input_buffer.begin() + end_pos);
+                char action = input_buffer[end_pos]; // 'M' = Press/Move, 'm' = Release
+
+                // Consumăm octeții din buffer
+                input_buffer.erase(input_buffer.begin(), input_buffer.begin() + end_pos + 1);
+
+                int btn_code = 0, px = 0, py = 0;
+                if (sscanf(seq.c_str(), "%d;%d;%d", &btn_code, &px, &py) == 3) {
+                    Event ev;
+                    ev.type = Event::MouseEv;
+                    ev.mouse.x = px - 1; // Conversie de la 1-based (ANSI) la 0-based
+                    ev.mouse.y = py - 1;
+
+                    // Extragere modificatori
+                    if (btn_code & 4)   ev.mouse.shift = true;
+                    if (btn_code & 8)   ev.mouse.alt = true;
+                    if (btn_code & 16)  ev.mouse.ctrl = true;
+
+                    int base_btn = btn_code & 67; // Izolăm tipul de buton/acțiune
+
+                    if (base_btn == 64) {
+                        ev.mouse.button = MouseButton::WheelUp;
+                        ev.mouse.type = MouseEventType::Press;
+                    } else if (base_btn == 65) {
+                        ev.mouse.button = MouseButton::WheelDown;
+                        ev.mouse.type = MouseEventType::Press;
+                    } else if (btn_code & 32) { // Motion / Move
+                        ev.mouse.type = MouseEventType::Move;
+                        int b = btn_code & 3;
+                        if (b == 0) ev.mouse.button = MouseButton::Left;
+                        else if (b == 1) ev.mouse.button = MouseButton::Middle;
+                        else if (b == 2) ev.mouse.button = MouseButton::Right;
+                    } else { // Click standard
+                        int b = btn_code & 3;
+                        if (b == 0) ev.mouse.button = MouseButton::Left;
+                        else if (b == 1) ev.mouse.button = MouseButton::Middle;
+                        else if (b == 2) ev.mouse.button = MouseButton::Right;
+
+                        ev.mouse.type = (action == 'M') ? MouseEventType::Press : MouseEventType::Release;
+                    }
+                    return ev;
+                }
+            }
+        }
+
+        // 2. Fallback pe citirea standard de tastatură
+        Key k = getKey();
+        if (k) {
+            Event ev;
+            ev.type = Event::KeyEv;
+            ev.key = k;
+            return ev;
+        }
+
+        return Event{};
+    }
 
         void clear() {
             // Wipe the hidden back buffer
             for (auto& cell : back_buffer) cell.ch = ' ';
-            horiz_lines.clear();
-            vert_lines.clear();
         }
 
         void display() {
@@ -241,49 +712,87 @@ namespace tui {
             }
 
             int last_fg = -1;
-            int last_bg = -2;
+            int last_bg = -1;
             int last_style = -1;
+
+            // Tracking pentru starea RGB
+            bool last_was_rgb = false;
+            uint8_t last_r = 0, last_g = 0, last_b = 0;
 
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     int idx = y * width + x;
 
-                    // Smart Diff-Rendering: check if char, Colors, OR style changed
-                    if (back_buffer[idx].ch    != front_buffer[idx].ch ||
-                        back_buffer[idx].fg    != front_buffer[idx].fg ||
-                        back_buffer[idx].bg    != front_buffer[idx].bg ||
-                        back_buffer[idx].style != front_buffer[idx].style) {
+                    const auto& back = back_buffer[idx];
+                    auto& front = front_buffer[idx];
 
+                    // 1. Smart Diff-Rendering: verificare dacă s-a schimbat caracterul, tipul de culoare sau valorile
+                    bool changed = (back.ch != front.ch) ||
+                                   (back.is_rgb != front.is_rgb) ||
+                                   (back.style != front.style);
+
+                    if (back.is_rgb) {
+                        changed = changed || (back.r != front.r) || (back.g != front.g) || (back.b != front.b);
+                    } else {
+                        changed = changed || (back.fg != front.fg) || (back.bg != front.bg);
+                    }
+
+                    if (changed) {
                         moveCursor(x, y);
 
-                        // Update formatting escape codes only when something shifts
-                        if (back_buffer[idx].fg != last_fg ||
-                            back_buffer[idx].bg != last_bg ||
-                            back_buffer[idx].style != last_style) {
+                        // 2. Evaluare dacă stilul/culoarea trebuie re-emise
+                        bool style_changed = false;
 
-                            std::cout << "\033[" << back_buffer[idx].style;
-                            std::cout << ";38;5;" << back_buffer[idx].fg;
+                        if (back.is_rgb) {
+                            // Dacă celula curentă e RGB, re-emitem dacă înainte nu era RGB, dacă s-a schimba stilul sau componentele RGB
+                            if (!last_was_rgb || back.style != last_style ||
+                                back.r != last_r || back.g != last_g || back.b != last_b) {
 
-                            // Only apply explicit background if it isn't set to native terminal fallback (-1)
-                            if (back_buffer[idx].bg >= 0) {
-                                std::cout << ";48;5;" << back_buffer[idx].bg;
-                            } else {
-                                // Explicitly clear background overrides to fall back to the terminal native skin
-                                std::cout << ";49";
+                                std::cout << "\033[" << back.style << ";38;2;"
+                                          << static_cast<int>(back.r) << ";"
+                                          << static_cast<int>(back.g) << ";"
+                                          << static_cast<int>(back.b);
+
+                                if (back.bg >= 0) {
+                                    std::cout << ";48;5;" << back.bg;
+                                } else {
+                                    std::cout << ";49";
+                                }
+                                std::cout << "m";
+
+                                last_was_rgb = true;
+                                last_r = back.r;
+                                last_g = back.g;
+                                last_b = back.b;
+                                last_style = back.style;
+                                last_bg = back.bg;
                             }
-                            std::cout << "m";
+                        } else {
+                            // Cale standard ANSI 256 / culori de bază
+                            if (last_was_rgb || back.fg != last_fg || back.bg != last_bg || back.style != last_style) {
+                                std::cout << "\033[" << back.style << ";38;5;" << back.fg;
 
-                            last_fg = back_buffer[idx].fg;
-                            last_bg = back_buffer[idx].bg;
-                            last_style = back_buffer[idx].style;
+                                if (back.bg >= 0) {
+                                    std::cout << ";48;5;" << back.bg;
+                                } else {
+                                    std::cout << ";49";
+                                }
+                                std::cout << "m";
+
+                                last_was_rgb = false;
+                                last_fg = back.fg;
+                                last_bg = back.bg;
+                                last_style = back.style;
                             }
-
-                        std::cout << back_buffer[idx].ch;
-                        front_buffer[idx] = back_buffer[idx]; // Sync
                         }
+
+                        std::cout << back.ch;
+                        front = back; // Sincronizare buffer
+                    }
                 }
             }
-            // Clean up all attributes at the end of the frame
+
+            // Curățare atribute la finalul cadrului
             std::cout << "\033[0m";
             std::cout.flush();
         }
@@ -295,116 +804,182 @@ namespace tui {
             usleep(microseconds);
         }
 
-        // High-level structural line registers
-        void registerLineH(int y, int x1, int x2) {
-            for (int x = x1; x <= x2; ++x) horiz_lines[y].push_back(x);
+        // --- FUNCTIA PRINCIPALA SI SIMPLA ---
+        // Poți transmite fie o imagine statică (PNG/JPG/WebP), fie un GIF animat.
+        // Daca nu treci 'color', va folosi culorile naturale.
+        bool draw_image(const std::string& filepath, int x, int y, int w, int h) {
+            return draw_image(filepath, x, y, w, h, this->current_color_config);
         }
 
-        void registerLineV(int x, int y1, int y2) {
-            for (int y = y1; y <= y2; ++y) vert_lines[x].push_back(y);
+        bool draw_image(const std::string& filepath, int x, int y, int w, int h, const ColorConfig& config) {
+        std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) return false;
+
+        std::streamsize file_size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        std::vector<uint8_t> buffer(file_size);
+        if (!file.read(reinterpret_cast<char*>(buffer.data()), file_size)) {
+            return false;
         }
 
-        bool hasLineV(int x, int y) {
-            auto it = vert_lines.find(x);
-            if (it == vert_lines.end()) return false;
-            return std::find(it->second.begin(), it->second.end(), y) != it->second.end();
+        int img_w = 0, img_h = 0, frames = 0, channels = 0;
+        int* delays = nullptr;
+
+        // 1. GIF Animat
+        uint8_t* gif_data = static_cast<uint8_t*>(
+            stbi_load_gif_from_memory(buffer.data(), static_cast<int>(buffer.size()),
+                                      &delays, &img_w, &img_h, &frames, &channels, 4)
+        );
+
+        if (gif_data) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+            ).count();
+
+            int current_frame = (ms / 100) % frames;
+            int frame_stride = img_w * img_h * 4;
+
+            render_pixel_buffer(gif_data + (current_frame * frame_stride), img_w, img_h, 4, x, y, w, h, config);
+            stbi_image_free(gif_data);
+            if (delays) STBI_FREE(delays);
+            return true;
         }
 
-        bool hasLineH(int x, int y) {
-            auto it = horiz_lines.find(y);
-            if (it == horiz_lines.end()) return false;
-            return std::find(it->second.begin(), it->second.end(), x) != it->second.end();
+        // 2. PNG / JPG (stb_image)
+        uint8_t* img_data = static_cast<uint8_t*>(
+            stbi_load_from_memory(buffer.data(), static_cast<int>(buffer.size()), &img_w, &img_h, &channels, 4)
+        );
+
+        if (img_data) {
+            render_pixel_buffer(img_data, img_w, img_h, 4, x, y, w, h, config);
+            stbi_image_free(img_data);
+            return true;
         }
+
+        // 3. Fallback WebP (libwebp)
+        uint8_t* webp_data = WebPDecodeRGBA(buffer.data(), buffer.size(), &img_w, &img_h);
+        if (webp_data) {
+            render_pixel_buffer(webp_data, img_w, img_h, 4, x, y, w, h, config);
+            WebPFree(webp_data);
+            return true;
+        }
+
+        return false;
+    }
     };
 
     struct Box {
-        int width, height;
+        int x, y;
     };
 
-    //      ▜            ▗
+    //      ▜          ▗
     //    █▌▐ █▌▛▛▌█▌▛▌▜▘▛▘
     //    ▙▖▐▖▙▖▌▌▌▙▖▌▌▐▖▄▌
     //
 
+    // Calcularea numărului real de coloane vizuale
+    inline size_t utf8_cols(const std::string& text) {
+        size_t i = 0, cols = 0;
+        while (i < text.length()) {
+            unsigned char c = text[i];
+            size_t len = 1;
+            if ((c & 0x80) == 0)          len = 1;
+            else if ((c & 0xE0) == 0xC0) len = 2;
+            else if ((c & 0xF0) == 0xE0) len = 3;
+            else if ((c & 0xF8) == 0xF0) len = 4;
+
+            if (i + len > text.length()) break;
+            i += len;
+            cols++;
+        }
+        return cols;
+    }
+
+    // Tăierea sigură la nivel de caractere/coloane vizuale
+    inline std::string utf8_substr(const std::string& text, size_t max_cols) {
+        size_t i = 0, cols = 0;
+        while (i < text.length() && cols < max_cols) {
+            unsigned char c = text[i];
+            size_t len = 1;
+            if ((c & 0x80) == 0)          len = 1;
+            else if ((c & 0xE0) == 0xC0) len = 2;
+            else if ((c & 0xF0) == 0xE0) len = 3;
+            else if ((c & 0xF8) == 0xF0) len = 4;
+
+            if (i + len > text.length()) break;
+            i += len;
+            cols++;
+        }
+        return text.substr(0, i);
+    }
+
     // The base class for EVERYTHING in your UI
-    class Element {
+    class Element : public std::enable_shared_from_this<Element> {
     public:
+        int pos_x = 0, pos_y = 0, width = 0, height = 0, allocated_width = 0, allocated_height = 0;
+
+        Style style = normal;
+        Colors bg = black, fg = white;
+
+        Fill fill_mode = nofill;
+        Anchor anchor_mode = noanchor;
+
+        bool bordered = false;
+
+        // Referință slabă către părinte (nu crește reference count-ul)
+        std::weak_ptr<Element> parent;
+
         virtual ~Element() = default;
 
-        // How much space does this widget actually need?
-        virtual Box getGeometry() = 0;
+        // Helper util pentru copii: returnează părintele sub formă de shared_ptr dacă încă există
+        std::shared_ptr<Element> getParent() const {
+            return parent.lock();
+        }
 
-        // Draw yourself inside this specific allocated box on the screen
-        virtual void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir = LayoutDir::None) = 0;
+        virtual Box getGeometry() { return { width, height }; }
+        virtual Box getPosition() { return { pos_x, pos_y }; }
+
+        Box getAnchorOffset() const {
+            int eff_w = (allocated_width > 0) ? allocated_width : width;
+            int eff_h = (allocated_height > 0) ? allocated_height : height;
+
+            int ox = 0, oy = 0;
+            int mode = static_cast<int>(anchor_mode);
+
+            if (mode & hcenter) ox = (eff_w - width) / 2;
+            else if (mode & right) ox = eff_w - width;
+
+            if (mode & vcenter) oy = (eff_h - height) / 2;
+            else if (mode & bottom) oy = eff_h - height;
+
+            return { std::max(0, ox), std::max(0, oy) };
+        }
+
+        void renderBorder(compositor& tui, int rx, int ry, int rw, int rh) {
+            if (rw < 2 || rh < 2) return;
+
+            tui.setString(rx, ry, "┌", fg, bg, style);
+            tui.setString(rx + rw - 1, ry, "┐", fg, bg, style);
+            tui.setString(rx, ry + rh - 1, "└", fg, bg, style);
+            tui.setString(rx + rw - 1, ry + rh - 1, "┘", fg, bg, style);
+
+            for (int i = 1; i < rw - 1; ++i) {
+                tui.setString(rx + i, ry, "─", fg, bg, style);
+                tui.setString(rx + i, ry + rh - 1, "─", fg, bg, style);
+            }
+
+            for (int i = 1; i < rh - 1; ++i) {
+                tui.setString(rx, ry + i, "│", fg, bg, style);
+                tui.setString(rx + rw - 1, ry + i, "│", fg, bg, style);
+            }
+        }
+
+        virtual void render(compositor& tui) = 0;
     };
 
     // A smart pointer alias to make syntax cleaner
     using element = std::shared_ptr<Element>;
-
-    class Flex : public Element {
-    private:
-        element child;
-        Mod alignment;
-    public:
-        Flex(element child_node, Mod align) : child(child_node), alignment(align) {}
-
-        Mod getMode() const { return alignment; }
-        element getChild() const { return child; }
-
-        Box getGeometry() override {
-            return child->getGeometry();
-        }
-
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            Box target = child->getGeometry();
-
-            // Defend bounds - Separated hfill and vfill components logic
-            int final_w = (alignment == Mod::fill || alignment == Mod::hfill) ? allocated_w : target.width;
-            int final_h = (alignment == Mod::fill || alignment == Mod::vfill) ? allocated_h : target.height;
-            if (final_w > allocated_w) final_w = allocated_w;
-            if (final_h > allocated_h) final_h = allocated_h;
-
-            int target_x = x;
-            int target_y = y;
-
-            // Center calculations only kick in if we aren't completely filling the axis
-            if (alignment == Mod::hcenter || alignment == Mod::center) {
-                target_x += (allocated_w - final_w) / 2;
-            }
-            if (alignment == Mod::vcenter || alignment == Mod::center) {
-                target_y += (allocated_h - final_h) / 2;
-            }
-
-            child->render(tui, target_x, target_y, final_w, final_h, parent_dir);
-        }
-    };
-
-    class SizeOverride : public Element {
-    private:
-        element child;
-        int fixed_w;
-        int fixed_h;
-    public:
-        SizeOverride(element child_node, int w, int h)
-            : child(child_node), fixed_w(w), fixed_h(h) {}
-
-        element getChild() const { return child; }
-
-        Box getGeometry() override {
-            Box b = child->getGeometry();
-            return { fixed_w >= 0 ? fixed_w : b.width, fixed_h >= 0 ? fixed_h : b.height };
-        }
-
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            Box b = child->getGeometry();
-            int target_w = fixed_w >= 0 ? fixed_w : allocated_w;
-            int target_h = fixed_h >= 0 ? fixed_h : allocated_h;
-            child->render(tui, x, y, std::min(target_w, allocated_w), std::min(target_h, allocated_h), parent_dir);
-        }
-    };
-
-    struct width { int value; width(int v) : value(v) {} };
-    struct height { int value; height(int v) : value(v) {} };
 
     class Border : public Element {
     private:
@@ -412,152 +987,75 @@ namespace tui {
     public:
         Border(element child_node) : child(child_node) {}
 
-        element getChild() const { return child; }
-
+        // A border widget needs 2 extra columns and 2 extra rows than its child!
         Box getGeometry() override {
             Box b = child->getGeometry();
-            return { b.width + 2, b.height + 2 };
+            return { b.x + 2, b.y + 2 };
         }
 
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            if (allocated_w < 2 || allocated_h < 2) return;
+        void render(compositor& tui) override {
+            if (width < 2 || height < 2) return; // Too small to show anything
 
-            // Register structural layout lines first so setChar can spot intersections
-            tui.registerLineH(y, x, x + allocated_w - 1);
-            tui.registerLineH(y + allocated_h - 1, x, x + allocated_w - 1);
-            tui.registerLineV(x, y, y + allocated_h - 1);
-            tui.registerLineV(x + allocated_w - 1, y, y + allocated_h - 1);
+            // 1. Draw the beautiful frame borders using the screen size assigned to us
+            tui.setString(pos_x, pos_y, "┌");
+            tui.setString(pos_x + width - 1, pos_y, "┐");
+            tui.setString(pos_x, pos_y + height - 1, "└");
+            tui.setString(pos_x + width - 1, pos_y + height - 1, "┘");
 
-            // Now draw the frame elements
-            tui.setChar(x, y, "┌");
-            tui.setChar(x + allocated_w - 1, y, "┐");
-            tui.setChar(x, y + allocated_h - 1, "└");
-            tui.setChar(x + allocated_w - 1, y + allocated_h - 1, "┘");
-
-            for (int i = 1; i < allocated_w - 1; ++i) {
-                tui.setChar(x + i, y, "─");
-                tui.setChar(x + i, y + allocated_h - 1, "─");
+            // Top and Bottom horizontal bars
+            for (int i = 1; i < width - 1; ++i) {
+                tui.setString(pos_x + i, pos_y, "─");
+                tui.setString(pos_x + i, pos_y + height - 1, "─");
             }
 
-            for (int i = 1; i < allocated_h - 1; ++i) {
-                tui.setChar(x, y + i, "│");
-                tui.setChar(x + allocated_w - 1, y + i, "│");
+            // Left and Right vertical sidebars
+            for (int i = 1; i < height - 1; ++i) {
+                tui.setString(pos_x, pos_y + i, "│");
+                tui.setString(pos_x + width - 1, pos_y + i, "│");
             }
 
-            child->render(tui, x + 1, y + 1, allocated_w - 2, allocated_h - 2, parent_dir);
+            // 2. Transmite coordonate absolute corecte pentru child fără să le acumulezi la infinit
+            child->pos_x = this->pos_x + 1;
+            child->pos_y = this->pos_y + 1;
+            child->width = this->width - 2;
+            child->height = this->height - 2;
+            child->render(tui);
         }
     };
 
     class Text : public Element {
     public:
         std::string content;
-        Style style = normal;
-        Colors fg = white;
-        int bg = -1;
 
-        Text(std::string text) : content(text) {}
-
-        Box getGeometry() override {
-            return { (int)content.length(), 1 }; // Width is text length, height is 1 row
+        Text(std::string text) : content(text) {
+            width = (int)utf8_cols(content);
+            height = 1;
         }
 
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            // Render text, cutting it off if the container is too small
-            std::string visible = content.substr(0, allocated_w);
-            tui.setString(x, y, visible, fg, bg, style);
+        void render(compositor& tui) override {
+            int eff_w = (allocated_width > 0) ? allocated_width : width;
+            int eff_h = (allocated_height > 0) ? allocated_height : height;
+
+            int render_x = pos_x;
+            int render_y = pos_y;
+            int text_max_w = eff_w;
+
+            if (bordered) {
+                renderBorder(tui, pos_x, pos_y, eff_w, eff_h);
+                render_x += 1;
+                render_y += 1;
+                text_max_w = std::max(0, eff_w - 2);
+            }
+
+            std::string visible = utf8_substr(content, text_max_w);
+            Box offset = getAnchorOffset();
+            tui.setString(render_x + offset.x, render_y + offset.y, visible, fg, bg, style);
         }
     };
 
     // Helper function to create the clean FTXUI syntax
     inline element text(std::string text) {
         return std::make_shared<Text>(text);
-    }
-
-    class AsciiCanvas : public Element {
-    public:
-        int img_w = 0;
-        int img_h = 0;
-        std::vector<Cell> pixels;
-        bool use_custom_color = false;
-        Colors custom_color_val = white;
-        std::vector<std::vector<Cell>> frames;
-        std::vector<int> delays;
-        std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        int total_duration = 0;
-
-        AsciiCanvas(int w, int h, const std::vector<Cell>& p) : img_w(w), img_h(h), pixels(p) {}
-
-        Box getGeometry() override {
-            return { img_w, img_h };
-        }
-
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            const std::vector<Cell>* current_pixels = &pixels;
-            if (!frames.empty()) {
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-                if (total_duration > 0) {
-                    elapsed_ms %= total_duration;
-                }
-                int current_frame = 0;
-                long long accumulated = 0;
-                for (size_t i = 0; i < frames.size(); ++i) {
-                    accumulated += delays[i];
-                    if (elapsed_ms < accumulated) {
-                        current_frame = i;
-                        break;
-                    }
-                }
-                current_pixels = &frames[current_frame];
-            }
-
-            for (int r = 0; r < std::min(img_h, allocated_h); ++r) {
-                for (int c = 0; c < std::min(img_w, allocated_w); ++c) {
-                    const Cell& pixel = (*current_pixels)[r * img_w + c];
-                    int final_fg = use_custom_color ? static_cast<int>(custom_color_val) : pixel.fg;
-                    tui.setChar(x + c, y + r, pixel.ch, final_fg, pixel.bg, pixel.style);
-                }
-            }
-        }
-    };
-
-    inline element canvas(int w, int h, const std::vector<Cell>& pixels) {
-        return std::make_shared<AsciiCanvas>(w, h, pixels);
-    }
-
-    // Helpers intern pentru detectarea elementelor cu modificator de umplere (fill)
-    inline bool is_hfill_element(element el) {
-        while (el) {
-            if (auto flex_obj = std::dynamic_pointer_cast<Flex>(el)) {
-                Mod mode = flex_obj->getMode();
-                return mode == Mod::fill || mode == Mod::hfill;
-            }
-            if (auto border_obj = std::dynamic_pointer_cast<Border>(el)) {
-                el = border_obj->getChild();
-            } else if (auto size_obj = std::dynamic_pointer_cast<SizeOverride>(el)) {
-                el = size_obj->getChild();
-            } else {
-                break;
-            }
-        }
-        return false;
-    }
-
-    inline bool is_vfill_element(element el) {
-        while (el) {
-            if (auto flex_obj = std::dynamic_pointer_cast<Flex>(el)) {
-                Mod mode = flex_obj->getMode();
-                return mode == Mod::fill || mode == Mod::vfill;
-            }
-            if (auto border_obj = std::dynamic_pointer_cast<Border>(el)) {
-                el = border_obj->getChild();
-            } else if (auto size_obj = std::dynamic_pointer_cast<SizeOverride>(el)) {
-                el = size_obj->getChild();
-            } else {
-                break;
-            }
-        }
-        return false;
     }
 
     class VBox : public Element {
@@ -570,45 +1068,83 @@ namespace tui {
             int max_w = 0;
             int total_h = 0;
             for (auto& child : children) {
+                if (!child) continue;
                 Box b = child->getGeometry();
-                if (b.width > max_w) max_w = b.width;
-                total_h += b.height;
+                if (b.x > max_w) max_w = b.x;
+                total_h += b.y;
+            }
+            // Dacă VBox are border, crește spațiul minim cerut!
+            if (bordered) {
+                max_w += 2;
+                total_h += 2;
             }
             return { max_w, total_h };
         }
 
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir = LayoutDir::None) override {
-            int static_h = 0;
-            int fill_count = 0;
+        void render(compositor& tui) override {
+            if (allocated_width > 0)  width = allocated_width;
+            if (allocated_height > 0) height = allocated_height;
 
-            // Pasul 1: Calculăm spațiul cerut de elementele fixe și numărul de elemente flexibile
+            int pad = bordered ? 1 : 0;
+
+            if (bordered) {
+                renderBorder(tui, pos_x, pos_y, width, height);
+            }
+
+            // Calculăm spațiul util din interiorul VBox-ului
+            int inner_x = pos_x + pad;
+            int inner_y = pos_y + pad;
+            int inner_w = std::max(0, width - pad * 2);
+            int inner_h = std::max(0, height - pad * 2);
+
+            int vfill_count = 0;
+            int fixed_height_sum = 0;
+
             for (auto& child : children) {
-                if (is_vfill_element(child)) {
-                    fill_count++;
+                if (!child) continue;
+                child->parent = shared_from_this();
+
+                bool has_vfill = (child->fill_mode == vfill || child->fill_mode == fill);
+                if (has_vfill) {
+                    vfill_count++;
                 } else {
-                    static_h += child->getGeometry().height;
+                    fixed_height_sum += child->getGeometry().y;
                 }
             }
 
-            int remaining_space = allocated_h - static_h;
-            int fill_share = (fill_count > 0 && remaining_space > 0) ? (remaining_space / fill_count) : 0;
+            int available_space = std::max(0, inner_h - fixed_height_sum);
+            int height_per_fill = (vfill_count > 0) ? (available_space / vfill_count) : 0;
+            int remainder = (vfill_count > 0) ? (available_space % vfill_count) : 0;
 
-            int current_y = y;
+            int current_y = inner_y;
+
             for (auto& child : children) {
-                Box b = child->getGeometry();
+                if (!child) continue;
 
-                int remaining_h = (y + allocated_h) - current_y;
-                if (remaining_h <= 0) break;
+                bool has_vfill = (child->fill_mode == Fill::vfill || child->fill_mode == Fill::fill);
+                int child_h = has_vfill ? (height_per_fill + (remainder-- > 0 ? 1 : 0))
+                                        : child->getGeometry().y;
 
-                // Dacă e element de tip 'fill' pe axa verticală, îi dăm cota parte
-                int desired_h = is_vfill_element(child) ? fill_share : b.height;
-                int child_h = std::min(desired_h, remaining_h);
+                int max_allowed_h = (inner_y + inner_h) - current_y;
+                if (max_allowed_h <= 0) break;
+                child_h = std::min(child_h, max_allowed_h);
 
-                child->render(tui, x, current_y, allocated_w, child_h, LayoutDir::Vertical);
+                child->pos_x = inner_x;
+                child->pos_y = current_y;
+                child->allocated_height = child_h;
 
+                if (child->fill_mode == fill || child->fill_mode == hfill) {
+                    child->allocated_width = inner_w;
+                } else {
+                    child->allocated_width = child->width;
+                }
+
+                child->render(tui);
                 current_y += child_h;
             }
-        }    };
+        }
+        };
+
     // Helper function for the syntax
     inline element vbox(std::initializer_list<element> children) {
         return std::make_shared<VBox>(children);
@@ -624,154 +1160,92 @@ namespace tui {
             int total_w = 0;
             int max_h = 0;
             for (auto& child : children) {
+                if (!child) continue;
                 Box b = child->getGeometry();
-                total_w += b.width;
-                if (b.height > max_h) max_h = b.height;
+                total_w += b.x;
+                if (b.y > max_h) max_h = b.y;
+            }
+            if (bordered) {
+                total_w += 2;
+                max_h += 2;
             }
             return { total_w, max_h };
         }
 
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir = LayoutDir::None) override {
-            int static_w = 0;
-            int fill_count = 0;
+        void render(compositor& tui) override {
+            if (allocated_width > 0)  width = allocated_width;
+            if (allocated_height > 0) height = allocated_height;
 
-            // Pasul 1: Calculăm lățimea elementelor fixe și numărul de elemente flexibile
+            int pad = bordered ? 1 : 0;
+            if (bordered) {
+                renderBorder(tui, pos_x, pos_y, width, height);
+            }
+
+            int inner_x = pos_x + pad;
+            int inner_y = pos_y + pad;
+            int inner_w = std::max(0, width - pad * 2);
+            int inner_h = std::max(0, height - pad * 2);
+
+            int hfill_count = 0;
+            int fixed_width_sum = 0;
+
             for (auto& child : children) {
-                if (is_hfill_element(child)) {
-                    fill_count++;
+                if (!child) continue;
+                child->parent = shared_from_this();
+
+                bool has_hfill = (child->fill_mode == hfill || child->fill_mode == fill);
+                if (has_hfill) {
+                    hfill_count++;
                 } else {
-                    static_w += child->getGeometry().width;
+                    fixed_width_sum += child->getGeometry().x;
                 }
             }
 
-            int remaining_space = allocated_w - static_w;
-            int fill_share = (fill_count > 0 && remaining_space > 0) ? (remaining_space / fill_count) : 0;
+            int available_space = std::max(0, inner_w - fixed_width_sum);
+            int width_per_fill = (hfill_count > 0) ? (available_space / hfill_count) : 0;
+            int remainder = (hfill_count > 0) ? (available_space % hfill_count) : 0;
 
-            int current_x = x;
+            int current_x = inner_x;
+
             for (auto& child : children) {
-                Box b = child->getGeometry();
+                if (!child) continue;
 
-                int remaining_w = (x + allocated_w) - current_x;
-                if (remaining_w <= 0) break;
+                bool has_hfill = (child->fill_mode == Fill::hfill || child->fill_mode == Fill::fill);
+                int child_w = has_hfill ? (width_per_fill + (remainder-- > 0 ? 1 : 0))
+                                        : child->getGeometry().x;
 
-                // Dacă e element de tip 'fill' pe axa orizontală, primește cota parte
-                int desired_w = is_hfill_element(child) ? fill_share : b.width;
-                int child_w = std::min(desired_w, remaining_w);
+                int max_allowed_w = (inner_x + inner_w) - current_x;
+                if (max_allowed_w <= 0) break;
+                child_w = std::min(child_w, max_allowed_w);
 
-                child->render(tui, current_x, y, child_w, allocated_h, LayoutDir::Horizontal);
+                child->pos_x = current_x;
+                child->pos_y = inner_y;
+                child->allocated_width = child_w;
 
+                if (child->fill_mode == fill || child->fill_mode == vfill) {
+                    child->allocated_height = inner_h;
+                } else {
+                    child->allocated_height = child->height;
+                }
+
+                child->render(tui);
                 current_x += child_w;
             }
-        }    };
+        }
+    };
+
     inline element hbox(std::initializer_list<element> children) {
         return std::make_shared<HBox>(children);
-    }
-
-    class Separator : public Element {
-    public:
-        Box getGeometry() override {
-            return { 1, 1 };
-        }
-
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            if (parent_dir == LayoutDir::Vertical) {
-                int mid_y = y + (allocated_h / 2);
-
-                // Docking Fix: Extend registration 1 character left (-1) and right (+allocated_w)
-                tui.registerLineH(mid_y, x - 1, x + allocated_w);
-
-                // Draw line including the boundary edges to hit the parent frame
-                for (int i = -1; i <= allocated_w; ++i) {
-                    tui.setChar(x + i, mid_y, "─");
-                }
-            } else {
-                int mid_x = x + (allocated_w / 2);
-
-                // Docking Fix: Extend registration 1 character up (-1) and down (+allocated_h)
-                tui.registerLineV(mid_x, y - 1, y + allocated_h);
-
-                // Draw line including the boundary edges to hit the parent frame
-                for (int j = -1; j <= allocated_h; ++j) {
-                    tui.setChar(mid_x, y + j, "│");
-                }
-            }
-        }
-    };
-
-    inline element separator() {
-        return std::make_shared<Separator>();
-    }
-
-    class Gauge : public Element {
-    public:
-        float progress = 0.0f;
-        Colors fg = white;
-        int bg = -1;
-
-        Gauge(float p) {
-            progress = p < 0.0f ? 0.0f : (p > 1.0f ? 1.0f : p);
-        }
-
-        Box getGeometry() override {
-            // Geometria minimă implicită (lățime mică pe 1 singur rând)
-            return { 4, 1 };
-        }
-
-        void render(compositor& tui, int x, int y, int allocated_w, int allocated_h, LayoutDir parent_dir) override {
-            if (allocated_h <= 0 || allocated_w <= 0) return;
-
-            float total_filled = progress * allocated_w;
-            int full_blocks = static_cast<int>(total_filled);
-            float remainder = total_filled - full_blocks;
-
-            // Caractere bloc din FTXUI pentru rezoluție fină sub-pixel
-            std::string fractions[] = {" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"};
-            int fraction_idx = static_cast<int>(remainder * 8.0f);
-
-            for (int i = 0; i < allocated_w; ++i) {
-                std::string ch = " ";
-                if (i < full_blocks) {
-                    ch = "█";
-                } else if (i == full_blocks && fraction_idx > 0) {
-                    ch = fractions[fraction_idx];
-                }
-
-                tui.setChar(x + i, y, ch, fg, bg, normal);
-            }
-        }
-    };
-
-    inline element gauge(float progress) {
-        return std::make_shared<Gauge>(progress);
     }
 
     //              ▗
     //    ▛▌▛▌█▌▛▘▀▌▜▘▛▌▛▘▛▘
     //    ▙▌▙▌▙▖▌ █▌▐▖▙▌▌ ▄▌
-    //     ▌
-
-    // Helper utility to safely locate the underlying target styleable element
-    inline element getStyleableTarget(element el) {
-        while (el) {
-            if (std::dynamic_pointer_cast<Text>(el) || std::dynamic_pointer_cast<Gauge>(el) || std::dynamic_pointer_cast<AsciiCanvas>(el)) {
-                return el;
-            }
-            if (auto border_obj = std::dynamic_pointer_cast<Border>(el)) {
-                el = border_obj->getChild();
-            } else if (auto flex_obj = std::dynamic_pointer_cast<Flex>(el)) {
-                el = flex_obj->getChild();
-            } else if (auto size_obj = std::dynamic_pointer_cast<SizeOverride>(el)) {
-                el = size_obj->getChild();
-            } else {
-                break;
-            }
-        }
-        return el;
-    }
+    //      ▌
 
     inline element operator/(element el, Style mod) {
         // Try to cast the generic element down to our Text class
-        if (auto txt_obj = std::dynamic_pointer_cast<Text>(getStyleableTarget(el))) {
+        if (auto txt_obj = std::dynamic_pointer_cast<Text>(el)) {
             switch (mod) {
                 case bold:      txt_obj->style = bold; break;
                 case italic:    txt_obj->style = italic; break;
@@ -781,266 +1255,86 @@ namespace tui {
         return el; // Return the modified element so it can be nested!
     }
 
-    inline element operator/(element el, Mod mod) {
+    /*inline element operator/(element el, Mod mod) {
         if (mod == border) {
             return std::make_shared<Border>(el);
         }
-        if (mod == fill || mod == hfill || mod == vfill || mod == center || mod == hcenter || mod == vcenter) {
-            return std::make_shared<Flex>(el, mod);
-        }
-        if (mod == color) {
-            if (auto canvas_obj = std::dynamic_pointer_cast<AsciiCanvas>(getStyleableTarget(el))) {
-                canvas_obj->use_custom_color = false;
-            }
+        return el;
+    }*/
+
+    inline element operator/(element el, Mod mod) {
+        if (el && mod == border) {
+            el->bordered = true;
         }
         return el;
-    }
-
-    inline element operator/(element el, custom_color cc) {
-        if (auto canvas_obj = std::dynamic_pointer_cast<AsciiCanvas>(getStyleableTarget(el))) {
-            canvas_obj->use_custom_color = true;
-            canvas_obj->custom_color_val = cc.c;
-        }
-        return el;
-    }
-
-    inline element operator/(element el, width w) {
-        return std::make_shared<SizeOverride>(el, w.value, -1);
-    }
-
-    inline element operator/(element el, height h) {
-        return std::make_shared<SizeOverride>(el, -1, h.value);
     }
 
     inline element operator/(element el, Colors s) {
-        element target = getStyleableTarget(el);
-        // Try to cast the generic element down to our Text class
-        if (auto txt_obj = std::dynamic_pointer_cast<Text>(target)) {
+        if (auto txt_obj = std::dynamic_pointer_cast<Text>(el)) {
             txt_obj->fg = s;
-        }
-        if (auto gauge_obj = std::dynamic_pointer_cast<Gauge>(target)) {
-            gauge_obj->fg = s;
-        }
-        if (auto canvas_obj = std::dynamic_pointer_cast<AsciiCanvas>(target)) {
-            canvas_obj->use_custom_color = true;
-            canvas_obj->custom_color_val = s;
-        }
-        return el; // Return the modified element so it can be nested!
-    }
-
-    inline element operator/(element el, bg_color bg) {
-        element target = getStyleableTarget(el);
-        if (auto txt_obj = std::dynamic_pointer_cast<Text>(target)) {
-            txt_obj->bg = bg.c;
-        }
-        if (auto gauge_obj = std::dynamic_pointer_cast<Gauge>(target)) {
-            gauge_obj->bg = bg.c;
-        }
-        if (auto canvas_obj = std::dynamic_pointer_cast<AsciiCanvas>(target)) {
-            for (auto& p : canvas_obj->pixels) {
-                p.bg = bg.c;
-            }
-            for (auto& f : canvas_obj->frames) {
-                for (auto& p : f) {
-                    p.bg = bg.c;
-                }
-            }
         }
         return el;
     }
 
-    // --- NEW IMAGE LOADER & CONVERTER OVERLOAD ---
+    inline element operator/(element el, bg_color bg) {
+        if (auto txt_obj = std::dynamic_pointer_cast<Text>(el)) {
+            txt_obj->bg = bg.c;
+        }
+        return el;
+    }
 
-    inline element canvas(const std::string& filepath, int target_w, int target_h) {
-        int img_w = 0, img_h = 0, channels = 0;
-        unsigned char* rgb_data = nullptr;
-        bool loaded_via_webp = false;
-        bool loaded_via_gif = false;
-        std::vector<std::vector<Cell>> gif_frames;
-        std::vector<int> gif_delays;
+    inline element operator/(element el, WidthMod m) {
+        if (el) {
+            el->width = m.value;
+        }
+        return el;
+    }
 
-        // Check file extension to route WebP explicitly
-        std::string lower_path = filepath;
-        std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), ::tolower);
+    inline element operator/(element el, HeightMod m) {
+        if (el) {
+            el->height = m.value;
+        }
+        return el;
+    }
 
-        if (lower_path.size() >= 5 && lower_path.compare(lower_path.size() - 5, 5, ".webp") == 0) {
-            std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-            if (file.is_open()) {
-                size_t size = file.tellg();
-                file.seekg(0, std::ios::beg);
-                std::vector<unsigned char> buffer(size);
-                if (file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-                    rgb_data = WebPDecodeRGBA(buffer.data(), size, &img_w, &img_h);
-                    channels = 4;
-                    loaded_via_webp = true;
-                }
+    inline element operator/(element el, XMod m) {
+        if (el) {
+            el->pos_x = m.value;
+        }
+        return el;
+    }
+
+    inline element operator/(element el, YMod m) {
+        if (el) {
+            el->pos_y = m.value;
+        }
+        return el;
+    }
+
+    inline element operator/(element el, Fill mode) {
+        if (el) {
+            el->fill_mode = mode;
+        }
+        return el;
+    }
+
+    inline element operator/(element el, Anchor mode) {
+        if (el) {
+            int current = static_cast<int>(el->anchor_mode);
+            int incoming = static_cast<int>(mode);
+
+            // Dacă vine aliniere orizontală, curățăm doar bit-ii orizontali (1 | 2 | 4 = 7)
+            if (incoming & 7) {
+                current &= ~7;
             }
-        }
-
-        // Handle standard GIF parsing via specific stb implementation
-        if (!rgb_data && lower_path.size() >= 4 && lower_path.compare(lower_path.size() - 4, 4, ".gif") == 0) {
-            std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-            if (file.is_open()) {
-                size_t size = file.tellg();
-                file.seekg(0, std::ios::beg);
-                std::vector<unsigned char> buffer(size);
-                if (file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-                    int w = 0, h = 0, layers = 0, comp = 0;
-                    int* delays_ptr = nullptr;
-                    unsigned char* gif_data = stbi_load_gif_from_memory(buffer.data(), size, &delays_ptr, &w, &h, &layers, &comp, 3);
-                    if (gif_data) {
-                        loaded_via_gif = true;
-                        img_w = w;
-                        img_h = h;
-
-                        auto match_ansi256 = [](int r, int g, int b) -> int {
-                            int r_idx = (r * 5) / 255;
-                            int g_idx = (g * 5) / 255;
-                            int b_idx = (b * 5) / 255;
-                            return 16 + (36 * r_idx) + (6 * g_idx) + b_idx;
-                        };
-                        std::string ascii_ramp = " .:-=+*#%@";
-
-                        for (int l = 0; l < layers; ++l) {
-                            std::vector<Cell> converted_pixels(target_w * target_h);
-                            unsigned char* frame_data = gif_data + (l * img_w * img_h * 3);
-
-                            for (int y = 0; y < target_h; ++y) {
-                                float src_y = (static_cast<float>(y) / target_h) * img_h;
-                                int y0 = std::min(static_cast<int>(floor(src_y)), img_h - 1);
-                                int y1 = std::min(y0 + 1, img_h - 1);
-                                float weight_y = src_y - y0;
-
-                                for (int x = 0; x < target_w; ++x) {
-                                    float src_x = (static_cast<float>(x) / target_w) * img_w;
-                                    int x0 = std::min(static_cast<int>(floor(src_x)), img_w - 1);
-                                    int x1 = std::min(x0 + 1, img_w - 1);
-                                    float weight_x = src_x - x0;
-
-                                    float r = 0, g = 0, b = 0;
-                                    int sample_points[4][2] = {{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}};
-                                    float weights[4] = {
-                                        (1.0f - weight_x) * (1.0f - weight_y),
-                                        weight_x * (1.0f - weight_y),
-                                        (1.0f - weight_x) * weight_y,
-                                        weight_x * weight_y
-                                    };
-
-                                    for (int k = 0; k < 4; ++k) {
-                                        int p_idx = (sample_points[k][1] * img_w + sample_points[k][0]) * 3;
-                                        r += frame_data[p_idx] * weights[k];
-                                        g += frame_data[p_idx + 1] * weights[k];
-                                        b += frame_data[p_idx + 2] * weights[k];
-                                    }
-
-                                    int final_r = std::round(r);
-                                    int final_g = std::round(g);
-                                    int final_b = std::round(b);
-
-                                    float luminance = 0.2126f * final_r + 0.7152f * final_g + 0.0722f * final_b;
-                                    int ramp_idx = std::round((luminance / 255.0f) * (ascii_ramp.size() - 1));
-
-                                    Cell& cell = converted_pixels[y * target_w + x];
-                                    cell.ch = std::string(1, ascii_ramp[ramp_idx]);
-                                    cell.fg = match_ansi256(final_r, final_g, final_b);
-                                    cell.bg = -1;
-                                    cell.style = normal;
-                                }
-                            }
-                            gif_frames.push_back(converted_pixels);
-                            gif_delays.push_back(delays_ptr[l]);
-                        }
-                        stbi_image_free(gif_data);
-                    }
-                }
+            // Dacă vine aliniere verticală, curățăm doar bit-ii verticali (8 | 16 | 32 = 56)
+            if (incoming & 56) {
+                current &= ~56;
             }
+
+            el->anchor_mode = static_cast<Anchor>(current | incoming);
         }
-
-        // Handle standard PNG, JPG parsing via standard backend if WebP or GIF wasn't triggered
-        if (!rgb_data && !loaded_via_gif) {
-            rgb_data = stbi_load(filepath.c_str(), &img_w, &img_h, &channels, 3);
-            channels = 3;
-        }
-
-        if (!rgb_data && !loaded_via_gif) {
-            // Graceful error fallback: Return a tiny empty canvas cell array
-            return std::make_shared<AsciiCanvas>(1, 1, std::vector<Cell>{{"?", 9, -1, normal}});
-        }
-
-        if (loaded_via_gif) {
-            auto canvas_ptr = std::make_shared<AsciiCanvas>(target_w, target_h, gif_frames.empty() ? std::vector<Cell>{} : gif_frames[0]);
-            canvas_ptr->frames = std::move(gif_frames);
-            canvas_ptr->delays = std::move(gif_delays);
-            canvas_ptr->total_duration = 0;
-            for (int d : canvas_ptr->delays) {
-                canvas_ptr->total_duration += d;
-            }
-            return canvas_ptr;
-        }
-
-        std::vector<Cell> converted_pixels(target_w * target_h);
-        std::string ascii_ramp = " .:-=+*#%@";
-
-        // Quantization maps down to xterm 256 color specifications seamlessly
-        auto match_ansi256 = [](int r, int g, int b) -> int {
-            int r_idx = (r * 5) / 255;
-            int g_idx = (g * 5) / 255;
-            int b_idx = (b * 5) / 255;
-            return 16 + (36 * r_idx) + (6 * g_idx) + b_idx;
-        };
-
-        // Bilinear interpolation downsampling to structural canvas coordinates
-        for (int y = 0; y < target_h; ++y) {
-            float src_y = (static_cast<float>(y) / target_h) * img_h;
-            int y0 = std::min(static_cast<int>(floor(src_y)), img_h - 1);
-            int y1 = std::min(y0 + 1, img_h - 1);
-            float weight_y = src_y - y0;
-
-            for (int x = 0; x < target_w; ++x) {
-                float src_x = (static_cast<float>(x) / target_w) * img_w;
-                int x0 = std::min(static_cast<int>(floor(src_x)), img_w - 1);
-                int x1 = std::min(x0 + 1, img_w - 1);
-                float weight_x = src_x - x0;
-
-                float r = 0, g = 0, b = 0;
-                int sample_points[4][2] = {{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}};
-                float weights[4] = {
-                    (1.0f - weight_x) * (1.0f - weight_y),
-                    weight_x * (1.0f - weight_y),
-                    (1.0f - weight_x) * weight_y,
-                    weight_x * weight_y
-                };
-
-                for (int k = 0; k < 4; ++k) {
-                    int p_idx = (sample_points[k][1] * img_w + sample_points[k][0]) * channels;
-                    r += rgb_data[p_idx] * weights[k];
-                    g += rgb_data[p_idx + 1] * weights[k];
-                    b += rgb_data[p_idx + 2] * weights[k];
-                }
-
-                int final_r = std::round(r);
-                int final_g = std::round(g);
-                int final_b = std::round(b);
-
-                // Perceptual luminance calculation to extract accurate density patterns
-                float luminance = 0.2126f * final_r + 0.7152f * final_g + 0.0722f * final_b;
-                int ramp_idx = std::round((luminance / 255.0f) * (ascii_ramp.size() - 1));
-
-                Cell& cell = converted_pixels[y * target_w + x];
-                cell.ch = std::string(1, ascii_ramp[ramp_idx]);
-                cell.fg = match_ansi256(final_r, final_g, final_b);
-                cell.bg = -1;
-                cell.style = normal;
-            }
-        }
-
-        if (loaded_via_webp) {
-            free(rgb_data); // WebP uses typical standard allocator free paths
-        } else {
-            stbi_image_free(rgb_data);
-        }
-
-        return std::make_shared<AsciiCanvas>(target_w, target_h, converted_pixels);
+        return el;
     }
 
 }

@@ -1,19 +1,20 @@
-cmake_minimum_required(VERSION 4.2)
-project(libtui)
+cmake_minimum_required(VERSION 3.20) # VERSION 4.2 este invalid/viitor; folosește o versiune standard (ex. 3.20)
+project(libtui LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_library(libtui INTERFACE
-        snapcell.hpp)
+# 1. Căutăm pachetul oficial WebP
+find_package(WebP REQUIRED)
 
-#target_include_directories(libtui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(libtui INTERFACE)
+target_sources(libtui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/snapcell.hpp)
+target_include_directories(libtui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_run main.cpp)
 
-target_link_libraries(test_run PRIVATE libtui)
-
-# 3. Include directories for WebP headers if necessary
-target_include_directories(test_run PRIVATE ${WEBP_INCLUDE_DIRS})
-
-# 4. Link the webp library to resolve 'WebPDecodeRGBA'
-target_link_libraries(test_run PRIVATE ${WEBP_LIBRARIES})
+# 2. Linkăm libtui și ținta WebP găsită de CMake
+target_link_libraries(test_run PRIVATE
+        libtui
+        WebP::webp
+)
